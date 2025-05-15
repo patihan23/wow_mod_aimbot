@@ -1,0 +1,6 @@
+pymem==1.14.0
+keyboard==0.13.5
+pywin32==310
+PyQt5==5.15.6
+numpy==1.23.5
+psutil>=5.9.0

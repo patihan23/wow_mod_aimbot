@@ -1,0 +1,36 @@
+{
+    "_comment": "This file contains ship-specific parameters for better aiming accuracy",
+    "shell_speeds": {
+        "default": 850,
+        "yamato_460mm": 780,
+        "montana_406mm": 820,
+        "shimakaze_torpedoes": 76,
+        "des_moines_203mm": 853,
+        "z52_torpedoes": 69,
+        "kremlin_457mm": 800,
+        "smolensk_130mm": 950,
+        "shikishima_510mm": 760,
+        "hakuryu_ap_bombs": 140
+    },
+    "shell_gravity": {
+        "default": 9.8,
+        "battleship_main": 10.2,
+        "cruiser_main": 9.9,
+        "destroyer_main": 9.7,
+        "torpedo": 0.0
+    },
+    "aim_offsets": {
+        "_comment": "These values are ship-specific aim adjustments",
+        "default": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "yamato": {"x": 0.0, "y": 0.0, "z": -0.2},
+        "des_moines": {"x": 0.0, "y": 0.0, "z": 0.1}
+    },
+    "ship_dimensions": {
+        "_comment": "Ship dimensions for bounding box drawing (length, width, height in meters)",
+        "default": [180, 30, 40],
+        "yamato": [263, 38.9, 37.5],
+        "des_moines": [218, 23, 35],
+        "shimakaze": [129, 12, 30],
+        "montana": [273, 36.3, 38]
+    }
+}

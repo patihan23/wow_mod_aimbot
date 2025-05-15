@@ -1,0 +1,23 @@
+{
+    "process_name": "WorldOfWarships64.exe",
+    "offsets": {
+        "_comment": "These are placeholder addresses and offsets. Real values would need to be found through memory scanning.",
+        "player_base": "0x4",
+        "player_pos_offset": "0x150",
+        "entity_list": "0x9ABCDEF0",
+        "entity_size": "0x280",
+        "entity_pos_offset": "0x180",
+        "entity_velocity_offset": "0x190",
+        "max_entities": 32,
+        "shell_info_base": "0x8BBCD456",
+        "shell_speed_offset": "0x68",
+        "view_matrix_base": "0x8CDEF789",
+        "view_matrix_offset": "0x200"
+    },
+    "signatures": {
+        "_comment": "These are pattern signatures to find dynamic memory addresses",
+        "player_base_sig": "48 8B 05 ? ? ? ? 48 8B 48 ? 48 8B 01 FF 90",
+        "entity_list_sig": "48 8B 0D ? ? ? ? 48 85 C9 74 ? 48 8B 01 FF 50",
+        "view_matrix_sig": "0F 11 05 ? ? ? ? 48 8B 46 ? 48 8D 0D"
+    }
+}

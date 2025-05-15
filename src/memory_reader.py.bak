@@ -1,0 +1,204 @@
+import ctypes
+import struct
+import math
+import time
+import os
+import configparser
+import json
+from pymem import Pymem
+from pymem.process import module_from_name
+
+# Windows API for reading memory
+kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+ReadProcessMemory = kernel32.ReadProcessMemory
+ReadProcessMemory.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+ReadProcessMemory.restype = ctypes.c_bool
+
+# Vector3 class for handling 3D coordinates
+class Vector3:
+    def __init__(self, x=0, y=0, z=0):
+        self.x = x
+        self.y = y
+        self.z = z
+    
+    def distance(self, other):
+        return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2 + (self.z - other.z)**2)
+    
+    def __str__(self):
+        return f"({self.x:.2f}, {self.y:.2f}, {self.z:.2f})"
+
+class MemoryReader:
+    def __init__(self, config_file=None):
+        self.pm = None
+        self.game_module = None
+        self.offsets = {}
+          # If no config file provided, use the absolute path
+        if config_file is None:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            config_file = os.path.join(base_dir, 'config', 'memory_config.json')
+        
+        self.load_config(config_file)
+        self.connect_to_game()
+      def load_config(self, config_file):
+        """Load memory offsets and other configuration data"""
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+                # Convert string hex values to integers
+                self.offsets = {}
+                for key, value in config['offsets'].items():
+                    if isinstance(value, str) and value.startswith("0x"):
+                        self.offsets[key] = int(value, 16)
+                    else:
+                        self.offsets[key] = value
+                self.process_name = config['process_name']
+        except Exception as e:
+            print(f"Error loading config: {e}")
+            # Default values as a fallback
+            self.process_name = "WorldOfWarships64.exe"
+            self.offsets = {
+                "player_base": 0x8ABCD123,  # Placeholder offset
+                "player_pos_offset": 0x150,
+                "entity_list": 0x9ABCDEF0,  # Placeholder offset
+                "entity_size": 0x280,
+                "entity_pos_offset": 0x180,                "entity_velocity_offset": 0x190,
+                "max_entities": 32,
+                "shell_info_base": 0x8BBCD456  # Placeholder offset
+            }
+    
+    def connect_to_game(self):
+        """Connect to the World of Warships process"""
+        possible_game_processes = ["WorldOfWarships.exe", "WoWs.exe", "WoWsLauncher.exe", "WorldOfWarships64.exe", "wows.exe"]
+        
+        # First try the process name from config
+        try:
+            self.pm = Pymem(self.process_name)
+            self.game_module = module_from_name(self.pm.process_handle, self.process_name).lpBaseOfDll
+            print(f"Connected to {self.process_name}")
+            print(f"Base address: {hex(self.game_module)}")
+            return
+        except Exception as e:            print(f"Failed to connect to {self.process_name}: {e}")
+            
+        # Try other possible process names
+        for process_name in possible_game_processes:
+            if process_name == self.process_name:
+                continue  # Already tried this one
+                
+            try:
+                self.pm = Pymem(process_name)
+                self.game_module = module_from_name(self.pm.process_handle, process_name).lpBaseOfDll
+                print(f"Connected to {process_name}")
+                print(f"Base address: {hex(self.game_module)}")
+                
+                # Update process name for future reference
+                self.process_name = process_name
+                return
+            except Exception as e:
+                print(f"Failed to connect to {process_name}: {e}")
+                
+        # If we get here, all attempts failed
+        raise Exception("Could not find any World of Warships process")
+    
+    def read_memory(self, address, data_type):
+        """Read memory at specified address with the given data type"""
+        try:
+            if data_type == "float":
+                return self.pm.read_float(address)
+            elif data_type == "int":
+                return self.pm.read_int(address)
+            elif data_type == "vector3":
+                x = self.pm.read_float(address)
+                y = self.pm.read_float(address + 4)
+                z = self.pm.read_float(address + 8)
+                return Vector3(x, y, z)
+            else:
+                raise ValueError(f"Unsupported data type: {data_type}")
+        except Exception as e:
+            print(f"Error reading memory at {hex(address)}: {e}")
+            return None
+    
+    def get_player_position(self):
+        """Get the player's ship position"""
+        player_base = self.game_module + self.offsets["player_base"]
+        pos_address = player_base + self.offsets["player_pos_offset"]
+        return self.read_memory(pos_address, "vector3")
+    
+    def get_enemy_ships(self):
+        """Get all enemy ships' positions and velocities"""
+        entity_list_base = self.game_module + self.offsets["entity_list"]
+        enemy_ships = []
+        
+        for i in range(self.offsets["max_entities"]):
+            entity_addr = entity_list_base + (i * self.offsets["entity_size"])
+            
+            # Check if entity exists and is enemy ship (this is a simplified check)
+            # In a real implementation, you would need to check entity type and team
+            try:
+                is_valid = self.pm.read_int(entity_addr) != 0
+                if not is_valid:
+                    continue
+                
+                # Get entity position
+                pos_addr = entity_addr + self.offsets["entity_pos_offset"]
+                position = self.read_memory(pos_addr, "vector3")
+                
+                # Get entity velocity
+                vel_addr = entity_addr + self.offsets["entity_velocity_offset"]
+                velocity = self.read_memory(vel_addr, "vector3")
+                
+                # Add to enemy ships list
+                enemy_ships.append({
+                    "position": position,
+                    "velocity": velocity,
+                    "address": entity_addr
+                })
+            except Exception:
+                continue
+        
+        return enemy_ships
+    
+    def get_shell_speed(self):
+        """Get the current selected shell speed"""
+        # In a real implementation, this would read the shell speed based on
+        # the currently selected weapon/shell type
+        shell_info_addr = self.game_module + self.offsets["shell_info_base"]
+        try:
+            return self.pm.read_float(shell_info_addr)
+        except:
+            # Default value if unable to read
+            return 850.0  # Default shell speed in m/s
+    
+    def calculate_target_data(self, player_pos, enemy_ship):
+        """Calculate distance and angle to target relative to player ship"""
+        enemy_pos = enemy_ship["position"]
+        distance = player_pos.distance(enemy_pos)
+        
+        # Calculate angle (simplified for this example)
+        dx = enemy_pos.x - player_pos.x
+        dy = enemy_pos.y - player_pos.y
+        angle = math.atan2(dy, dx) * (180 / math.pi)
+        
+        return {
+            "distance": distance,
+            "angle": angle
+        }
+        
+    def calculate_lead_position(self, player_pos, enemy_ship, shell_speed):
+        """Calculate the lead position based on enemy velocity and shell travel time"""
+        enemy_pos = enemy_ship["position"]
+        enemy_vel = enemy_ship["velocity"]
+        
+        # Calculate distance
+        distance = player_pos.distance(enemy_pos)
+        
+        # Estimated time for shell to reach target (simplified ballistics)
+        time_to_target = distance / shell_speed
+        
+        # Predict future position
+        lead_pos = Vector3(
+            enemy_pos.x + (enemy_vel.x * time_to_target),
+            enemy_pos.y + (enemy_vel.y * time_to_target),
+            enemy_pos.z + (enemy_vel.z * time_to_target)
+        )
+        
+        return lead_pos
